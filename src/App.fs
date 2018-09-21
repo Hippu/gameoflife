@@ -9,26 +9,25 @@ type cellState =
     | Alive
     | Dead
 
-let arrayDimension = 512
-let pixelMultiplier = 1024. / (float arrayDimension)
 
 let randomGen = System.Random()
 
-let emptyBoard =
+let emptyBoard arrayDimension =
     ArrayF.init arrayDimension arrayDimension (fun _ _ -> Dead)
 
-let randomBoard =
+let randomBoard arrayDimension =
     ArrayF.init arrayDimension arrayDimension (fun _ _ -> 
-        match randomGen.Next 3 with
+        match randomGen.Next 5 with
         | 0  -> Alive
         | _ -> Dead )
 
 let neighbourArray = Array.init 8 (fun _ -> (0, 0))
+let targetArray = Array.init 8 (fun _ -> Dead)
 
-let countAliveNeighboursOf x y (state: cellState[][]) =
+/// Count the amount of alive neighbours of a cell in the given location
+let countAliveNeighboursOf arrayDimension x y (state: cellState[][]) =
     match (x, y) with
-    | (0, _) -> 0
-    | (_, 0) -> 0
+    | (0, _) | (_, 0) -> 0
     | (x, y) when x = arrayDimension || y = arrayDimension -> 0
     | _ -> 
        Array.set neighbourArray 0 (x-1, y-1)
@@ -39,65 +38,88 @@ let countAliveNeighboursOf x y (state: cellState[][]) =
        Array.set neighbourArray 5 (x+1, y-1)
        Array.set neighbourArray 6 (x+1, y) 
        Array.set neighbourArray 7 (x+1, y+1)
-       neighbourArray
-       |> Array.map (fun (x,y) -> state.[x].[y])
-       |> Array.sumBy (function | Alive -> 1 | Dead -> 0)
 
-let cellNextState x y (state: cellState[][]) =
+       neighbourArray
+       |> Array.iteri (fun i (x,y) -> targetArray.[i] <- state.[x].[y])
+
+       targetArray
+       |> Array.sumBy (fun e ->
+            match e with
+            | Alive -> 1
+            | Dead -> 0
+        )
+
+/// Compute the next state of a cell in a location
+let cellNextState arrayDimension x y (state: cellState[][]) =
     let cellState = state.[x].[y]
     match cellState with
     | Alive ->
-        match countAliveNeighboursOf x y state with
+        match countAliveNeighboursOf arrayDimension x y state with
         | 0 | 1 -> Dead
         | 2 | 3 -> Alive
         | _ -> Dead
     | Dead ->
-        match countAliveNeighboursOf x y state with
+        match countAliveNeighboursOf arrayDimension x y state with
         | 3 -> Alive
         | _ -> Dead
 
-let mutable state = randomBoard
-let mutable nextState = emptyBoard
-let mutable ctx = 
+
+let mutable stopUpdating = true
+let app () =
+    let loadSettings () =
+        let dimensionInput : HTMLInputElement = !!document.getElementById "arrayDimension"
+        int dimensionInput.value
+
+    let arrayDimension = loadSettings ()
+    let pixelMultiplier = 1024. / (float arrayDimension)
+
     let canvas = document.getElementsByTagName_canvas().[0]
-    canvas.getContext_2d()
-
-let updateState () =
-    ArrayF.setAll Dead nextState
-    ArrayF.mapiTo (fun x y _ ->
-        cellNextState x y state
-    ) state nextState
-
-    let currentState = state
-    state <- nextState
-    nextState <- currentState
-    
-
-let draw state (ctx: Browser.CanvasRenderingContext2D) =
-    ctx.clearRect(0., 0., 1024., 1024.)
-    ArrayF.iteri (fun x y state ->
-            match state with
-            | Alive -> ctx.fillRect(float x * pixelMultiplier, float y * pixelMultiplier, pixelMultiplier, pixelMultiplier)
-            | Dead -> ()   
-        ) state
-
-let rec animationCallback (dt: float) =
-    match dt with
-    | dt when dt > 50. ->
-        updateState()
-        draw state ctx
-    | _ -> ()
-    window.requestAnimationFrame animationCallback |> ignore
-    
-
-let init() =
-    let canvas = document.getElementsByTagName_canvas().[0]
-    canvas.width <- 1024.
-    canvas.height <- 1024.
-    // The (!^) operator checks and casts a value to an Erased Union type
-    // See http://fable.io/docs/interacting.html#Erase-attribute
+    let ctx = canvas.getContext_2d()
     ctx.fillStyle <- !^"rgb(0, 0, 0)"
-    ArrayF.set state 1 1 Alive
-    Browser.window.requestAnimationFrame animationCallback |> ignore
 
-init()
+    let mutable state = randomBoard arrayDimension
+    let mutable nextState = emptyBoard arrayDimension
+
+    let draw state (ctx: Browser.CanvasRenderingContext2D) =
+        ctx.clearRect(0., 0., 1024., 1024.)
+        ArrayF.iteri (fun x y state ->
+                match state with
+                | Alive -> ctx.fillRect (float x * pixelMultiplier, float y * pixelMultiplier, pixelMultiplier, pixelMultiplier)
+                | Dead -> ()   
+            ) state
+
+    let updateState () =
+        ArrayF.setAll Dead nextState
+        ArrayF.mapiTo (fun x y _ ->
+            cellNextState arrayDimension x y state
+        ) state nextState
+
+        let currentState = state
+        state <- nextState
+        nextState <- currentState    
+
+    let mutable lastDrawn = 0.
+
+    let rec animationCallback (dt: float) =
+        if (dt - lastDrawn) > 33.3 then
+            lastDrawn <- dt
+            updateState ()
+            draw state ctx
+
+        match stopUpdating with
+        | false -> window.requestAnimationFrame animationCallback |> ignore
+        | true -> ()
+
+    stopUpdating <- false
+    window.requestAnimationFrame animationCallback |> ignore
+
+
+let startButton : HTMLButtonElement = !!document.getElementById "startButton"
+startButton.onclick <- fun _ -> 
+    app ()
+    startButton.disabled <- true
+
+let stopButton : HTMLButtonElement = !!document.getElementById "stopButton"
+stopButton.onclick <- fun _ -> 
+    stopUpdating <- true
+    startButton.disabled <- false
