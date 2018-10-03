@@ -9,7 +9,6 @@ type cellState =
     | Alive
     | Dead
 
-
 let randomGen = System.Random()
 
 let emptyBoard arrayDimension =
@@ -63,14 +62,16 @@ let cellNextState arrayDimension x y (state: cellState[][]) =
         | 3 -> Alive
         | _ -> Dead
 
+type appStatus =
+    | RunningWithDimensions of int
+    | Stopped
 
-let mutable stopUpdating = true
-let app () =
-    let loadSettings () =
-        let dimensionInput : HTMLInputElement = !!document.getElementById "arrayDimension"
-        int dimensionInput.value
-
-    let arrayDimension = loadSettings ()
+let mutable app = Stopped
+let runApp () =
+    let arrayDimension = 
+        match app with
+        | RunningWithDimensions dimension -> dimension
+        | _ -> 8
     let pixelMultiplier = 1024. / (float arrayDimension)
 
     let canvas = document.getElementsByTagName_canvas().[0]
@@ -106,20 +107,26 @@ let app () =
             updateState ()
             draw state ctx
 
-        match stopUpdating with
-        | false -> window.requestAnimationFrame animationCallback |> ignore
-        | true -> ()
+        match app with
+        | RunningWithDimensions _ -> window.requestAnimationFrame animationCallback |> ignore
+        | Stopped -> ()
 
-    stopUpdating <- false
     window.requestAnimationFrame animationCallback |> ignore
 
+let getDimensionSetting () =
+        let dimensionInput : HTMLInputElement = !!document.getElementById "arrayDimension"
+        int dimensionInput.value
 
-let startButton : HTMLButtonElement = !!document.getElementById "startButton"
-startButton.onclick <- fun _ -> 
-    app ()
-    startButton.disabled <- true
+let setUpEvents () =
+    let startButton : HTMLButtonElement = !!document.getElementById "startButton"
+    startButton.onclick <- fun _ ->
+        app <- getDimensionSetting () |> RunningWithDimensions
+        runApp ()
+        startButton.disabled <- true
 
-let stopButton : HTMLButtonElement = !!document.getElementById "stopButton"
-stopButton.onclick <- fun _ -> 
-    stopUpdating <- true
-    startButton.disabled <- false
+    let stopButton : HTMLButtonElement = !!document.getElementById "stopButton"
+    stopButton.onclick <- fun _ -> 
+        app <- Stopped
+        startButton.disabled <- false
+
+setUpEvents ()

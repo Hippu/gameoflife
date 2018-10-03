@@ -6,22 +6,6 @@ let init (length1: int) (length2: int) (initializer: int -> int -> 'T) =
         [| for y in 0 .. length2 -> (initializer x y)|] 
     |]
 
-let get (array: 'T[][]) (index1: int) (index2: int) =
-    array.[index1].[index2]
-
-let set (array: 'T[][]) (index1: int) (index2: int) (value: 'T) =
-    array.[index1].[index2] <- value
-
-let mapi (transform: int -> int -> 'T -> 'U) (array: 'T[][]) =
-    [| for x in 0 .. array.Length - 1 ->
-        [| for y in 0 .. array.Length - 1 -> transform x y (array.[x].[y]) |]
-    |]
-
-let mapTo (transform: 'T -> 'U) (source: 'T[]) (target: 'U[]) =
-    for x in 0 .. source.Length - 1 do
-        target.[x] <- transform source.[x]
-
-
 let mapiTo (transform: int -> int -> 'T -> 'T) (source: 'T[][]) (target: 'T[][]) =
     for x in 0 .. source.Length - 1 do
         let length = source.[x].Length
