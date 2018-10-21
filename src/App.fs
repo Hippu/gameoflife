@@ -20,10 +20,14 @@ let randomBoard arrayDimension =
         | 0  -> Alive
         | _ -> Dead )
 
+/// Scratch array for countAliveNeighbours of function
 let neighbourArray = Array.init 8 (fun _ -> (0, 0))
+/// Scratch array for countAliveNeighbours of function
 let targetArray = Array.init 8 (fun _ -> Dead)
 
 /// Count the amount of alive neighbours of a cell in the given location
+/// Uses the neighbourArray and targetArray arrays as scratch memory.
+/// This is to optimize the program by minimizing memory allocations
 let countAliveNeighboursOf arrayDimension x y (state: cellState[][]) =
     match (x, y) with
     | (0, _) | (_, 0) -> 0
@@ -62,12 +66,18 @@ let cellNextState arrayDimension x y (state: cellState[][]) =
         | 3 -> Alive
         | _ -> Dead
 
+/// The app can be in two states:
+/// Running with i * i dimensions or not running
 type appStatus =
     | RunningWithDimensions of int
     | Stopped
 
+/// The initial state of the app
 let mutable app = Stopped
+
+/// The function that starts running the app
 let runApp () =
+    // Get the dimensions for the "board" that the app is running in
     let arrayDimension = 
         match app with
         | RunningWithDimensions dimension -> dimension
@@ -78,9 +88,11 @@ let runApp () =
     let ctx = canvas.getContext_2d()
     ctx.fillStyle <- !^"rgb(0, 0, 0)"
 
+    // The application puts it states in these two two-dimensional arrays and swaps between them
     let mutable state = randomBoard arrayDimension
     let mutable nextState = emptyBoard arrayDimension
 
+    /// Draw the current state of the application to the rendering context of the canvas
     let draw state (ctx: Browser.CanvasRenderingContext2D) =
         ctx.clearRect(0., 0., 1024., 1024.)
         ArrayF.iteri (fun x y state ->
@@ -89,6 +101,7 @@ let runApp () =
                 | Dead -> ()   
             ) state
 
+    /// Update the state of the program according to the rules of 'Game of Life'
     let updateState () =
         ArrayF.setAll Dead nextState
         ArrayF.mapiTo (fun x y _ ->
@@ -99,24 +112,28 @@ let runApp () =
         state <- nextState
         nextState <- currentState    
 
-    let mutable lastDrawn = 0.
+    /// Timer for when the state the app was last updated
+    let mutable lastUpdate = 0.
 
-    let rec animationCallback (dt: float) =
-        if (dt - lastDrawn) > 33.3 then
-            lastDrawn <- dt
+    /// The callback for updating and drawing the state of the app
+    let rec updateAndDraw (dt: float) =
+        if (dt - lastUpdate) > 33.3 then
+            lastUpdate <- dt
             updateState ()
             draw state ctx
 
         match app with
-        | RunningWithDimensions _ -> window.requestAnimationFrame animationCallback |> ignore
+        | RunningWithDimensions _ -> window.requestAnimationFrame updateAndDraw |> ignore
         | Stopped -> ()
 
-    window.requestAnimationFrame animationCallback |> ignore
+    window.requestAnimationFrame updateAndDraw |> ignore
 
+/// Read the user inputted size for the board
 let getDimensionSetting () =
         let dimensionInput : HTMLInputElement = !!document.getElementById "arrayDimension"
         int dimensionInput.value
 
+/// Set up the events for the start and stop button
 let setUpEvents () =
     let startButton : HTMLButtonElement = !!document.getElementById "startButton"
     startButton.onclick <- fun _ ->
